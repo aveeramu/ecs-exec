@@ -7,6 +7,7 @@ import argparse
 import json
 import os
 import stat
+import platform
 
 
 def parse_args():
@@ -21,13 +22,21 @@ def get_choice_from_menu(options: list[str], title: str) -> str:
     if len(options) == 1:
         # Don't ask redundant questions
         return options[0]
-
-    terminal_menu = TerminalMenu(
-        options,
-        title=title,
-        skip_empty_entries=True,
-        show_shortcut_hints=False,
-        show_shortcut_hints_in_status_bar=False)
+    
+    if platform.system() == "Windows" :
+        terminal_menu = TerminalMenu(
+            options,
+            title=title,
+            show_shortcut_hints=False,
+            show_shortcut_hints_in_status_bar=False)
+    else :
+        terminal_menu = TerminalMenu(
+            options,
+            title=title,
+            skip_empty_entries=True,
+            show_shortcut_hints=False,
+            show_shortcut_hints_in_status_bar=False)
+        
     menu_entry_index = terminal_menu.show()
     return options[menu_entry_index]
 
@@ -84,9 +93,20 @@ def main():
 
     # This is a pretty ugly workaround to be able to use bash to run the AWS cli command.  Can't quite get the exec to
     # work correctly any other way.
-    filename = "temp-ecs-exec.sh"
+    filename =  "temp-ecs-exec.bat" if platform.system() == "Windows" else "temp-ecs-exec.sh"
+    print("Going to run the exec command \n")
     with open(filename, "w") as f:
-        f.write("#!/bin/bash\n")
+        if platform.system() == "Windows" :
+            print(" ".join(["aws", "--profile", args.profile, "--region", args.region,
+                        "ecs", "execute-command",
+                        "--cluster", args.cluster_arn,
+                        "--task", task_arn,
+                        "--container", container_name,
+                        "--command", "'/bin/bash'",
+                        "--interactive"]))
+        else :
+            f.write("#!/bin/bash\n")
+        
         f.write(" ".join(["aws", "--profile", args.profile, "--region", args.region,
                           "ecs", "execute-command",
                           "--cluster", args.cluster_arn,
@@ -96,7 +116,11 @@ def main():
                           "--interactive"]))
     st = os.stat(filename)
     os.chmod(filename, st.st_mode | stat.S_IEXEC)
-    subprocess.call([f"./{filename}"], shell=True)
+    if platform.system() == "Windows" :
+        os.system(filename)
+    else:
+        subprocess.call([f"./{filename}"], shell=True)
+
 
     # TODO: can't quite get this to work
     # subprocess.call(["aws", "--profile", args.profile, "--region", args.region,
